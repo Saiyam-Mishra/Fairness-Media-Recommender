@@ -1,0 +1,13 @@
+# ── Ingestion (TMDb fetcher) ────────────────────────────────────────────────
+requests
+
+# ── Database (Postgres / Supabase) ──────────────────────────────────────────
+psycopg2-binary
+
+# ── Agent (LangGraph + Gemini) ───────────────────────────────────────────────
+langgraph
+langchain-core
+google-genai
+
+# ── Shared ───────────────────────────────────────────────────────────────────
+python-dotenv
