@@ -4,6 +4,9 @@ requests
 # ── Database (Postgres / Supabase) ──────────────────────────────────────────
 psycopg2-binary
 
+# ── Embeddings (vector search) ──────────────────────────────────────────────
+sentence-transformers
+
 # ── Agent (LangGraph + Gemini) ───────────────────────────────────────────────
 langgraph
 langchain-core

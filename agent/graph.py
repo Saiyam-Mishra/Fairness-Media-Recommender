@@ -10,13 +10,15 @@ HOW TO ADD A NEW AGENT
 That's it — no other files need to change.
 """
 
-import os
 from typing import Callable
 
 from langgraph.graph import END, StateGraph
 
 from state import AgentState
 from english_to_sql import run as sql_agent
+from execute_sql import run as execute_sql_agent
+from conversation_llm import run as conversation_agent
+from master_agent import run as master_agent
 
 # ── Default sample schema (override via AgentState["db_schema"]) ──────────────
 DEFAULT_DB_SCHEMA = ''
@@ -36,6 +38,9 @@ ROUTE_KEYWORDS: dict[str, list[str]] = {
 # Maps route names to their run() callables.
 _AGENTS: dict[str, Callable[[AgentState], AgentState]] = {
     "english_to_sql": sql_agent,
+    # after producing SQL, execute it and then render results via the conversation agent
+    "execute_sql": execute_sql_agent,
+    "conversation": conversation_agent,
 }
 
 
@@ -71,7 +76,7 @@ def router_node(state: AgentState) -> AgentState:
 
 def route_decision(state: AgentState) -> str:
     """Conditional edge: return the route name so LangGraph jumps to the right node."""
-    return state.get("route", "english_to_sql")
+    return state.get("route", "conversation")
 
 
 # ── Error-handler node ────────────────────────────────────────────────────────
@@ -90,9 +95,10 @@ def error_node(state: AgentState) -> AgentState:
 def build_graph() -> StateGraph:
     builder = StateGraph(AgentState)
 
-    # Always start with routing
-    builder.add_node("router", router_node)
-    builder.set_entry_point("router")
+    # Master agent decides whether to call the SQL pipeline or the conversation
+    # agent. It is the entry point of the graph.
+    builder.add_node("master", master_agent)
+    builder.set_entry_point("master")
 
     # Register every agent as a node
     for name, fn in _AGENTS.items():
@@ -101,18 +107,27 @@ def build_graph() -> StateGraph:
     # Fallback for unknown routes
     builder.add_node("error", error_node)
 
-    # Conditional edges from router → agent nodes
+    # Conditional edges from master → agent nodes
     route_map = {name: name for name in _AGENTS}
     route_map["__default__"] = "error"        # LangGraph uses "__default__" as fallback
 
     builder.add_conditional_edges(
-        "router",
+        "master",
         route_decision,
         {**route_map},
     )
 
-    # Every agent leads to END
+    # Wire a short pipeline for SQL requests:
+    # english_to_sql -> execute_sql -> conversation -> END
+    if "english_to_sql" in _AGENTS:
+        builder.add_edge("english_to_sql", "execute_sql")
+        builder.add_edge("execute_sql", "conversation")
+        builder.add_edge("conversation", END)
+
+    # For other agents that aren't part of the SQL pipeline, just end
     for name in _AGENTS:
+        if name in ("english_to_sql", "execute_sql", "conversation"):
+            continue
         builder.add_edge(name, END)
     builder.add_edge("error", END)
 

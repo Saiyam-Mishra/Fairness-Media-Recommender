@@ -23,3 +23,5 @@ class AgentState(TypedDict, total=False):
 
     # Any error message surfaced during execution
     error: Optional[str]
+    # Rows returned from executing an SQL query
+    query_result: Optional[list[dict]]

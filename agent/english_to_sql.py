@@ -187,6 +187,8 @@ The query should be efficient and use the appropriate tables and columns to answ
 To avoid unnecessary complexity, only use JOINs when needed to get the correct answer. When possible, 
 use the movie_summary table to get the results.
 If the user does not mention a number, only give the top 5 results. If the user mentions a number, use that as the limit for the number of results.
+Include appropriate columns in the SELECT statement. Always include the movie title, genres, release year, and overview in the results.
+
 
 Rules:
 - Output ONLY the SQL query — no explanation, no markdown fences.

@@ -1,30 +1,14 @@
 from graph import build_graph, DEFAULT_DB_SCHEMA
 from state import AgentState
-import psycopg2
-from psycopg2.extras import RealDictCursor
-import os
 from dotenv import load_dotenv
 
 load_dotenv()
 
-conn = psycopg2.connect(
-    host=os.getenv("DB_HOST"),
-    port=int(os.getenv("DB_PORT")),
-    dbname=os.getenv("DB_NAME"),
-    user=os.getenv("DB_USER"),
-    password=os.getenv("DB_PASSWORD"),
-)
-cur = conn.cursor(cursor_factory=RealDictCursor)
-
 
 def main():
     print("=" * 60)
-    print("  LangGraph Multi-Agent System")
+    print("  Med-Rec")
     print("=" * 60)
-    print("\nAvailable agents:")
-    print("  • english_to_sql  — Converts natural language to SQL")
-    print("  • summarizer      — Summarizes text")
-    print("\nRouting is automatic based on your query.\n")
     print("Type 'exit' to quit.\n")
 
     graph = build_graph()
@@ -46,12 +30,18 @@ def main():
         }
 
         try:
+            # Invoke the graph. For SQL flows the graph will:
+            # router -> english_to_sql -> execute_sql -> results_llm
             result = graph.invoke(initial_state)
-            output = result.get("agent_output") or result.get("error") or "No output."
-            cur.execute(output)
-            for row in cur.fetchall():
-                print(" ", dict(row))
-            # print(f"\nAssistant: {output}\n")
+
+            # Prefer the final agent_output produced by the graph (LLM-friendly text),
+            # otherwise surface any error.
+            friendly = result.get("agent_output")
+            if friendly:
+                print(f"\nAssistant: {friendly}\n")
+            else:
+                err = result.get("error") or "No output produced by agents."
+                print(f"\n[Error] {err}\n")
         except Exception as exc:
             print(f"\n[Error] {exc}\n")
 
