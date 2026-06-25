@@ -51,6 +51,12 @@ so questions like *"show me action movies directed by women"* or *"how
 diverse is my recommendation list by country"* are handled directly rather
 than needing the user to write SQL themselves.
 
+The agent uses context-aware routing: it looks at conversation history and
+existing query results to decide whether to fetch new data via SQL or answer
+from what's already been retrieved. Follow-up questions like "tell me more
+about the first one" reuse the previous results without hitting the database
+again; requests for genuinely new recommendations trigger a fresh query.
+
 ## Project layout
 
 ```

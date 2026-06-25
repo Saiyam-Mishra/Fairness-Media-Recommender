@@ -4,14 +4,16 @@ import re
 from google import genai
 from langchain_core.messages import HumanMessage, SystemMessage
 from google.genai import types
+from groq import Groq
+from dotenv import load_dotenv
+
 
 from state import AgentState
-from dotenv import load_dotenv
 
 load_dotenv()
 
-# ── Gemini client ─────────────────────────────────────────────────────────────
-client = genai.Client(api_key=os.getenv("GEMINI_KEY", ""))
+# Groq client
+client = Groq(api_key=os.getenv("GROQ_API_KEY", ""))
 
 schema = '''
 fairness_audit (0 rows)
@@ -187,7 +189,7 @@ The query should be efficient and use the appropriate tables and columns to answ
 To avoid unnecessary complexity, only use JOINs when needed to get the correct answer. When possible, 
 use the movie_summary table to get the results.
 If the user does not mention a number, only give the top 5 results. If the user mentions a number, use that as the limit for the number of results.
-Include appropriate columns in the SELECT statement. Always include the movie title, genres, release year, and overview in the results.
+Include appropriate columns in the SELECT statement. Always include the movie title, genres, release year, ratings, and overview in the results.
 
 
 Rules:
@@ -203,11 +205,7 @@ Database schema:
 
 
 
-_MODEL = "gemini-2.5-flash"
-_CONFIG = types.GenerateContentConfig(
-    system_instruction=_SYSTEM_PROMPT,
-    temperature=0,
-)
+_MODEL = "llama-3.3-70b-versatile"
 
 def run(state: AgentState) -> AgentState:
     """LangGraph node: translate the latest user message into SQL."""
@@ -225,16 +223,15 @@ def run(state: AgentState) -> AgentState:
         return {**state, "error": "No user message found.", "agent_output": None}
 
     try:
-        lc_messages = [
-            SystemMessage(content=_SYSTEM_PROMPT.format(schema=schema)),
-            HumanMessage(content=user_question),
-        ]
-        response = client.models.generate_content(
+        response = client.chat.completions.create(
             model=_MODEL,
-            contents=user_question,
-            config=_CONFIG,
+            temperature=0.0,
+            messages=[
+                {"role": "system", "content": _SYSTEM_PROMPT.format(schema=schema)},
+                {"role": "user", "content": user_question},
+            ],
         )
-        output = response.text.strip()
+        output = response.choices[0].message.content.strip()
         sql = _clean_sql(output)
         return {**state, "agent_output": sql, "error": None}
 
