@@ -12,6 +12,9 @@ load_dotenv()
 def run(state: AgentState) -> AgentState:
     """Execute the SQL string found in state['agent_output'] and attach rows to state['query_result'].
 
+    If the SQL contains an {{EMBEDDINGS_VECTOR}} placeholder and vector_embeddings are 
+    available, replaces the placeholder with the actual embedding vector.
+
     Expects: state['agent_output'] -> SQL string
     Produces: state['query_result'] -> list[dict]
     """
@@ -23,6 +26,20 @@ def run(state: AgentState) -> AgentState:
     if not sql:
         return {**state, "query_result": None, "error": "No SQL found to execute.", "agent_output": None}
 
+    # Check if embeddings need to be substituted
+    vector_embeddings = state.get("vector_embeddings")
+    sql_has_vector = state.get("sql_has_vector", False)
+
+    if vector_embeddings:
+    # if sql_has_vector and vector_embeddings:
+        # The SQL should have {{EMBEDDINGS_VECTOR}} placeholders to be replaced
+        # For pgvector, we need to convert the embedding list to a PostgreSQL vector format
+        # The embedding is a list of floats; we'll pass it as a parameter instead
+        print(f"[execute_sql] replacing vector placeholder with actual embeddings")
+        use_embeddings = vector_embeddings
+    else:
+        use_embeddings = None
+
     try:
         conn = psycopg2.connect(
             host=os.getenv("DB_HOST"),
@@ -32,7 +49,26 @@ def run(state: AgentState) -> AgentState:
             password=os.getenv("DB_PASSWORD"),
         )
         cur = conn.cursor(cursor_factory=RealDictCursor)
-        cur.execute(sql)
+        
+        # If we have embeddings, we need to handle the SQL specially
+        # The LLM should have put the {{EMBEDDINGS_VECTOR}} placeholder
+        # We'll replace it with a parameter placeholder
+        if use_embeddings and "EMBEDDINGS_VECTOR" in sql:
+            # Replace the placeholder with %s for parameter binding
+            sql_escaped = sql.replace("%", "%%")
+            sql_with_params = sql_escaped.replace("EMBEDDINGS_VECTOR", "%s::vector")
+            print(f"[execute_sql] executing with vector parameter")
+            print(f"[execute_sql] SQL: {sql_with_params}")
+            cur.execute(sql_with_params, (use_embeddings,))
+        elif use_embeddings and "embeddings_vector" in sql:
+            # Replace the placeholder with %s for parameter binding
+            sql_with_params = sql.replace("embeddings_vector", "%s::vector")
+            print(f"[execute_sql] executing with vector parameter")
+            cur.execute(sql_with_params, (use_embeddings,))
+        else:
+            # Standard SQL execution without embeddings
+            cur.execute(sql)
+        
         rows = cur.fetchall()
         cur.close()
         conn.close()

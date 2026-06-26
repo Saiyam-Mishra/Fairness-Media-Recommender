@@ -3,6 +3,7 @@ import importlib.util
 import sys
 import types
 from pathlib import Path
+import pytest
 
 
 def _make_fake_groq_module(response_content: str):
@@ -177,6 +178,74 @@ def test_master_agent_context_aware_routing(tmp_path):
         }
         result = mod.run(state)
         assert result.get("route") == "conversation"
+    finally:
+        _cleanup_modules(inserted)
+        if str(agent_dir) in sys.path:
+            sys.path.remove(str(agent_dir))
+
+
+def test_analyze_query_detects_semantic_search(tmp_path):
+    """Test that analyze_query detects semantic search potential and encodes vectors."""
+    inserted = _inject_minimal_deps("SEMANTIC_QUERY: heartwarming comedies")
+    repo_root = Path(__file__).resolve().parents[1]
+    agent_dir = repo_root / "agent"
+    sys.path.insert(0, str(agent_dir))
+
+    try:
+        # Need SentenceTransformer for this test
+        try:
+            from sentence_transformers import SentenceTransformer
+        except ImportError:
+            pytest.skip("sentence-transformers not installed")
+
+        mod = _load_module_from_path(agent_dir / "analyze_query.py", "analyze_query_test_module")
+
+        # Test: semantic query detection
+        state = {
+            "messages": [{"role": "user", "content": "Show me some heartwarming comedies from the 2010s"}],
+        }
+        result = mod.run(state)
+
+        # Should detect semantic component
+        assert result.get("use_vector_search") is True
+        assert result.get("vector_search_query") is not None
+        assert "heartwarming comedies" in result.get("vector_search_query").lower()
+        assert result.get("vector_embeddings") is not None
+        assert len(result.get("vector_embeddings", [])) == 384  # all-MiniLM-L6-v2 is 384-dim
+        
+    finally:
+        _cleanup_modules(inserted)
+        if str(agent_dir) in sys.path:
+            sys.path.remove(str(agent_dir))
+
+
+def test_analyze_query_no_semantic(tmp_path):
+    """Test that analyze_query correctly identifies queries with no semantic component."""
+    inserted = _inject_minimal_deps("NO_SEMANTIC")
+    repo_root = Path(__file__).resolve().parents[1]
+    agent_dir = repo_root / "agent"
+    sys.path.insert(0, str(agent_dir))
+
+    try:
+        from sentence_transformers import SentenceTransformer
+        pytest.skip = lambda *a: None  # allow test to run
+    except ImportError:
+        pytest.skip("sentence-transformers not installed")
+
+    try:
+        mod = _load_module_from_path(agent_dir / "analyze_query.py", "analyze_query_test_module2")
+
+        # Test: structured query (no semantic)
+        state = {
+            "messages": [{"role": "user", "content": "Show me movies released in 2020"}],
+        }
+        result = mod.run(state)
+
+        # Should NOT detect semantic component
+        assert result.get("use_vector_search") is False
+        assert result.get("vector_search_query") is None
+        assert result.get("vector_embeddings") is None
+        
     finally:
         _cleanup_modules(inserted)
         if str(agent_dir) in sys.path:

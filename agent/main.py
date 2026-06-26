@@ -22,6 +22,10 @@ def main():
         "db_schema": DEFAULT_DB_SCHEMA,
         "error": None,
         "query_result": None,  # persist across invocations
+        # Vector search fields
+        "vector_search_query": None,
+        "vector_embeddings": None,
+        "use_vector_search": False,
     }
 
     while True:

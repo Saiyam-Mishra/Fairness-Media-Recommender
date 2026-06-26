@@ -19,6 +19,7 @@ from english_to_sql import run as sql_agent
 from execute_sql import run as execute_sql_agent
 from conversation_llm import run as conversation_agent
 from master_agent import run as master_agent
+from analyze_query import run as analyze_query_agent
 
 # ── Default sample schema (override via AgentState["db_schema"]) ──────────────
 DEFAULT_DB_SCHEMA = ''
@@ -100,6 +101,9 @@ def build_graph() -> StateGraph:
     builder.add_node("master", master_agent)
     builder.set_entry_point("master")
 
+    # Query analyzer (runs before SQL agent to detect vector search potential)
+    builder.add_node("analyze_query", analyze_query_agent)
+
     # Register every agent as a node
     for name, fn in _AGENTS.items():
         builder.add_node(name, fn)
@@ -107,28 +111,42 @@ def build_graph() -> StateGraph:
     # Fallback for unknown routes
     builder.add_node("error", error_node)
 
-    # Conditional edges from master → agent nodes
-    route_map = {name: name for name in _AGENTS}
-    route_map["__default__"] = "error"        # LangGraph uses "__default__" as fallback
+    # Conditional routing from master to:
+    # - analyze_query (if going to SQL)
+    # - conversation (if going to conversation)
+    # - error (if unknown route)
+    def route_from_master(state: AgentState) -> str:
+        route = state.get("route", "conversation")
+        if route == "english_to_sql":
+            return "analyze_query"  # go through analyzer before SQL
+        elif route == "conversation":
+            return "conversation"
+        else:
+            return "error"
 
     builder.add_conditional_edges(
         "master",
-        route_decision,
-        {**route_map},
+        route_from_master,
+        {
+            "analyze_query": "analyze_query",
+            "conversation": "conversation",
+            "error": "error",
+        },
     )
 
-    # Wire a short pipeline for SQL requests:
-    # english_to_sql -> execute_sql -> conversation -> END
-    if "english_to_sql" in _AGENTS:
-        builder.add_edge("english_to_sql", "execute_sql")
-        builder.add_edge("execute_sql", "conversation")
-        builder.add_edge("conversation", END)
+    # analyze_query always flows to english_to_sql
+    builder.add_edge("analyze_query", "english_to_sql")
 
-    # For other agents that aren't part of the SQL pipeline, just end
-    for name in _AGENTS:
-        if name in ("english_to_sql", "execute_sql", "conversation"):
-            continue
-        builder.add_edge(name, END)
+    # Wire the SQL pipeline:
+    # english_to_sql -> execute_sql -> conversation -> END
+    builder.add_edge("english_to_sql", "execute_sql")
+    builder.add_edge("execute_sql", "conversation")
+    builder.add_edge("conversation", END)
+
+    # Conversation node ends directly
+    builder.add_edge("conversation", END)
+    
+    # Error ends directly
     builder.add_edge("error", END)
 
     return builder.compile()

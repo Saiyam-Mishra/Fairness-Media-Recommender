@@ -23,5 +23,11 @@ class AgentState(TypedDict, total=False):
 
     # Any error message surfaced during execution
     error: Optional[str]
+    
     # Rows returned from executing an SQL query
     query_result: Optional[list[dict]]
+    
+    # Vector search fields (set by analyze_query agent)
+    vector_search_query: Optional[str]  # the semantic portion to embed
+    vector_embeddings: Optional[list[float]]  # encoded vector (384-dim for all-MiniLM-L6-v2)
+    use_vector_search: Optional[bool]  # whether to include vector distance in results

@@ -1,9 +1,6 @@
 import os
 import re
 
-from google import genai
-from langchain_core.messages import HumanMessage, SystemMessage
-from google.genai import types
 from groq import Groq
 from dotenv import load_dotenv
 
@@ -115,6 +112,7 @@ movie_summary (1000 rows)
   cert_in: text nullable
   watch_providers_json: jsonb nullable
   updated_at: timestamptz nullable
+  embedding: USER-DEFINED nullable
 
 movies (1000 rows)
   id: integer [PK]
@@ -190,6 +188,14 @@ To avoid unnecessary complexity, only use JOINs when needed to get the correct a
 use the movie_summary table to get the results.
 If the user does not mention a number, only give the top 5 results. If the user mentions a number, use that as the limit for the number of results.
 Include appropriate columns in the SELECT statement. Always include the movie title, genres, release year, ratings, and overview in the results.
+The user query that you receive maybe contain a command to include embeddings. If this is the case, you should make use of the 'embeddings' column in the 'movie_summary' table to find the most relevant results.
+If the query tells you to use embeddings, include the following SQL syntax in your SQL query:
+        <regular SQL query>...
+        WHERE embedding IS NOT NULL
+        ORDER BY embedding <-> EMBEDDINGS_VECTOR;
+        
+Ensure that you compare embedding with 'EMBEDDINGS_VECTOR', which is a
+placeholder and will be replaced later. The rest of your query must be valid and complete.
 
 
 Rules:
@@ -208,9 +214,14 @@ Database schema:
 _MODEL = "llama-3.3-70b-versatile"
 
 def run(state: AgentState) -> AgentState:
-    """LangGraph node: translate the latest user message into SQL."""
+    """LangGraph node: translate the latest user message into SQL.
+    
+    If vector_embeddings are available (from analyze_query), modifies the 
+    prompt to include vector distance ordering in the results.
+    """
     messages = state.get("messages", [])
-    # schema = state.get("db_schema", "No schema provided.")
+    use_vector_search = state.get("use_vector_search", False)
+    vector_search_query = state.get("vector_search_query")
 
     # Extract the latest user question
     user_question = ""
@@ -222,18 +233,38 @@ def run(state: AgentState) -> AgentState:
     if not user_question:
         return {**state, "error": "No user message found.", "agent_output": None}
 
+    # Build the user prompt with vector search instructions if applicable
+    if use_vector_search and vector_search_query:
+        # Tell the LLM that vector search should be used
+        user_prompt = (
+            f"{user_question}\n\n"
+            f"[VECTOR SEARCH HINT] This query has semantic components that will be matched using embeddings. "
+            f"Ensure the SQL query includes the embeddings comparison mentioned."
+        )
+        print(f"[english_to_sql] using vector search for: '{vector_search_query}'")
+    else:
+        user_prompt = user_question
+        print(f"[english_to_sql] standard SQL query (no vector search)")
+
     try:
         response = client.chat.completions.create(
             model=_MODEL,
             temperature=0.0,
             messages=[
                 {"role": "system", "content": _SYSTEM_PROMPT.format(schema=schema)},
-                {"role": "user", "content": user_question},
+                {"role": "user", "content": user_prompt},
             ],
         )
         output = response.choices[0].message.content.strip()
         sql = _clean_sql(output)
-        return {**state, "agent_output": sql, "error": None}
+        
+        # Store metadata about vector search usage
+        return {
+            **state, 
+            "agent_output": sql, 
+            "error": None,
+            "sql_has_vector": use_vector_search,
+        }
 
     except Exception as exc:
         return {**state, "agent_output": None, "error": f"SQL agent error: {exc}"}
