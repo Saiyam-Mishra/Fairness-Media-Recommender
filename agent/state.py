@@ -27,6 +27,13 @@ class AgentState(TypedDict, total=False):
     # Rows returned from executing an SQL query
     query_result: Optional[list[dict]]
     
+    # Previous turn's ranked recommendation results and query text (for fairness assessment)
+    last_results: Optional[list[dict]]
+    last_query: Optional[str]
+    
+    # Fairness assessment payload produced by fairness_agent
+    fairness_report: Optional[dict]
+    
     # Vector search fields (set by analyze_query agent)
     vector_search_query: Optional[str]  # the semantic portion to embed
     vector_embeddings: Optional[list[float]]  # encoded vector (384-dim for all-MiniLM-L6-v2)

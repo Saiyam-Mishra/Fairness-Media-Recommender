@@ -9,11 +9,25 @@ from state import AgentState
 load_dotenv()
 
 
+def _normalize_row(row: dict) -> dict:
+    if row.get("vote_average") is None:
+        row["vote_average"] = (
+            row.get("ratings") or
+            row.get("rating") or
+            row.get("avg_rating") or
+            row.get("score") or
+            None
+        )
+    return row
+
 def run(state: AgentState) -> AgentState:
     """Execute the SQL string found in state['agent_output'] and attach rows to state['query_result'].
 
     If the SQL contains an {{EMBEDDINGS_VECTOR}} placeholder and vector_embeddings are 
     available, replaces the placeholder with the actual embedding vector.
+
+    Also persists the results to state['last_results'] and the user query to state['last_query']
+    for fairness assessment on the next turn.
 
     Expects: state['agent_output'] -> SQL string
     Produces: state['query_result'] -> list[dict]
@@ -21,6 +35,14 @@ def run(state: AgentState) -> AgentState:
     # If there's already an error from an earlier agent, just pass through
     if state.get("error"):
         return {**state, "query_result": None}
+    
+    # Extract the user's query for persistence
+    messages = state.get("messages", [])
+    user_query = ""
+    for msg in reversed(messages):
+        if msg.get("role") == "user":
+            user_query = msg.get("content", "")
+            break
 
     sql = state.get("agent_output")
     if not sql:
@@ -73,7 +95,16 @@ def run(state: AgentState) -> AgentState:
         cur.close()
         conn.close()
 
-        return {**state, "query_result": rows, "error": None}
+        normalized_rows = [_normalize_row(dict(r)) for r in rows]
+        if normalized_rows:
+            print(f"[execute_sql] result keys: {list(normalized_rows[0].keys())}")
+        return {
+            **state,
+            "query_result": normalized_rows,
+            "last_results": normalized_rows,
+            "last_query": user_query,
+            "error": None,
+        }
 
     except Exception as exc:
         return {**state, "query_result": None, "error": f"SQL execution error: {exc}", "agent_output": None}

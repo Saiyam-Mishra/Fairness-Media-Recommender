@@ -187,7 +187,7 @@ The query should be efficient and use the appropriate tables and columns to answ
 To avoid unnecessary complexity, only use JOINs when needed to get the correct answer. When possible, 
 use the movie_summary table to get the results.
 If the user does not mention a number, only give the top 5 results. If the user mentions a number, use that as the limit for the number of results.
-Include appropriate columns in the SELECT statement. Always include the movie title, genres, release year, ratings, and overview in the results.
+Include appropriate columns in the SELECT statement. Always include the movie id, movie title, genres, release year, ratings, and overview in the results.
 The user query that you receive maybe contain a command to include embeddings. If this is the case, you should make use of the 'embeddings' column in the 'movie_summary' table to find the most relevant results.
 If the query tells you to use embeddings, include the following SQL syntax in your SQL query:
         <regular SQL query>...
