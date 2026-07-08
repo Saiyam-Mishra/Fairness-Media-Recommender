@@ -3,7 +3,7 @@ import os
 import psycopg2
 from psycopg2.extras import RealDictCursor
 from dotenv import load_dotenv
-
+from sql_corrector import run as sql_corrector_agent
 from state import AgentState
 
 load_dotenv()
@@ -106,6 +106,45 @@ def run(state: AgentState) -> AgentState:
             "error": None,
         }
 
+
     except Exception as exc:
-        return {**state, "query_result": None, "error": f"SQL execution error: {exc}", "agent_output": None}
+
+        error_text = str(exc)
+
+        correction_attempted = state.get("sql_correction_attempted", False)
+
+        if not correction_attempted:
+
+            print(f"[execute_sql] SQL execution failed: {error_text}. Attempting correction...")
+
+            corrected_state = {
+
+                **state,
+
+                "sql_error": error_text,
+
+                "sql_correction_attempted": True,
+
+            }
+
+            corrected_state = sql_corrector_agent(corrected_state)
+
+            corrected_sql = corrected_state.get("agent_output")
+
+            if corrected_sql and corrected_sql != sql:
+                return run(corrected_state)
+
+            print("[execute_sql] SQL correction did not produce a different query or failed.")
+
+        return {
+
+            **state,
+
+            "query_result": None,
+
+            "error": f"SQL execution error: {exc}",
+
+            "agent_output": None,
+
+        }
 
