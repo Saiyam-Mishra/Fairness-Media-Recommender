@@ -108,13 +108,14 @@ fairness_recommender/
 │   ├── conversation_llm.py      # result summarisation
 │   ├── fairness_agent.py        # fairness assessment + re-ranking
 │   ├── fairness_metrics.py      # SPD, EOD, OAED, Exposure@K (pure Python)
-│   ├── state.py                 # shared AgentState TypedDict
-│   └── app.py                   # Streamlit web interface
+│   └── state.py                 # shared AgentState TypedDict
+│   
 │
 ├── tests/
 │   └── run_tests.py             # automated multi-turn test runner → test_results.docx
 │
 ├── data/                        # generated at runtime (gitignored)
+├── app.py                       # Streamlit web interface
 ├── .env.example
 └── requirements.txt
 ```
