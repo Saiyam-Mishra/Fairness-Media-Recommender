@@ -19,6 +19,9 @@ from dotenv import load_dotenv
 from state import AgentState
 from fairness_metrics import compute_fairness_metrics
 
+from sentence_transformers import SentenceTransformer
+_embed_model = SentenceTransformer("all-MiniLM-L6-v2")
+
 load_dotenv()
 
 client = Groq(api_key=os.getenv("GROQ_API_KEY", ""))
@@ -106,8 +109,11 @@ Write a concise, natural-language explanation that:
    - Describe the bias (e.g., "only 15% of top 10 were female directors")
    - Show the before/after metrics if re-ranking was applied
    - Explain what changed and why
-5. Keep the explanation under 300 words
-6. Use plain language, not jargon
+5. SPD of 0 indicates perfect parity. Both strongly negative (protected underrepresented) 
+  and strongly positive (protected overrepresented) values indicate imbalance.
+  Do not describe a positive SPD as "more balanced" — it means over-correction.
+6. Keep the explanation under 300 words
+7. Use plain language, not jargon
 
 Do NOT make up numbers — use only the metrics provided."""
 
@@ -335,7 +341,7 @@ def _fetch_supplementary_results(
 ) -> tuple[list[dict], str]:
     """Fetch additional protected-group items using SQL against movie_summary."""
     excluded_ids = [r.get("movie_id") for r in current_results if r.get("movie_id") is not None]
-
+    print(f"[fairness_agent] excluded_ids: {excluded_ids}")
     genre_hints: list[str] = []
     for row in current_results[:5]:
         genres = row.get("genres") or []
@@ -360,17 +366,16 @@ def _fetch_supplementary_results(
     # Add vote_average check
     where_parts.append("vote_average IS NOT NULL")
 
-    # Add genre hint if available
+    # Require dominant genre to be present
     if genre_hints:
-        where_parts.append("genres && %s::text[]")
-        params.append(genre_hints)
+        where_parts.append("%s = ANY(genres)")
+        params.append(genre_hints[0])
 
-    # # Add query text search if available
-    # query_text = (original_query or "").strip()
-    # if query_text:
-    #     where_parts.append("(title ILIKE %s OR overview ILIKE %s)")
-    #     query_like = f"%{query_text}%"
-    #     params.extend([query_like, query_like])
+    # Embed the original query for semantic ranking
+    where_parts.append("embedding IS NOT NULL")
+    query_embedding = _embed_model.encode(
+        original_query, normalize_embeddings=True
+    ).tolist()
 
     where_clause = " AND ".join(where_parts)
     sql = f"""
@@ -379,9 +384,10 @@ def _fetch_supplementary_results(
                company_countries, spoken_languages
         FROM movie_summary
         WHERE {where_clause}
-        ORDER BY vote_average DESC, popularity DESC NULLS LAST
+        ORDER BY embedding <=> %s::vector, vote_average DESC, popularity DESC NULLS LAST
         LIMIT 20
     """
+    params.append(query_embedding)
 
     conn = _get_db_connection()
     cur = conn.cursor(cursor_factory=RealDictCursor)
@@ -453,7 +459,12 @@ def _inject_improved_results(
                 removed = True
                 break
         if not removed and len(updated) > k:
-            updated.pop()
+            for idx in range(len(updated) - 1, -1, -1):
+                if not _matches_protected(updated[idx].get(attribute), attribute, protected_values):
+                    updated.pop(idx)
+                    break
+            else:
+                updated.pop()
         inserted += 1
 
     return updated[:k], inserted

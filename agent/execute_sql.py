@@ -48,6 +48,12 @@ def run(state: AgentState) -> AgentState:
     if not sql:
         return {**state, "query_result": None, "error": "No SQL found to execute.", "agent_output": None}
 
+    # Strip markdown fences if the model accidentally included them
+    import re
+    sql = sql.strip()
+    sql = re.sub(r"^```(?:sql)?\s*", "", sql, flags=re.IGNORECASE)
+    sql = re.sub(r"\s*```$", "", sql)
+    sql = sql.strip()
     # Check if embeddings need to be substituted
     vector_embeddings = state.get("vector_embeddings")
     sql_has_vector = state.get("sql_has_vector", False)

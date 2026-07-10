@@ -37,6 +37,12 @@ Rules:
    - "Why is there no Asian cinema here?"
    - "Aren't there any non-English films?"
    - "This seems biased towards Hollywood"
+   - "there is still only 1 non-English movie, add more"
+   - "there is still 1 English movie"
+   - "add more female directors"
+   - "still too many American films"
+   - "can you add more variety"
+   - "still not diverse enough"
 
 2. Answer MASTER for everything else, including:
    - New recommendation requests ("give me thriller movies")
@@ -47,6 +53,10 @@ Rules:
 3. If there are NO previous results in the conversation, always answer MASTER — fairness assessment requires a previous result set to assess.
 
 4. When in doubt, answer MASTER.
+
+5. If the user is commenting on the current result set's composition and asking 
+   for more representation of a group, always answer FAIRNESS — even if phrased 
+   as "add more X" rather than "why are there no X".
 
 Output only the single token. No other text."""
 
