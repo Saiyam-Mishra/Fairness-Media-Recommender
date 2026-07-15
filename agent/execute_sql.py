@@ -54,6 +54,22 @@ def run(state: AgentState) -> AgentState:
     sql = re.sub(r"^```(?:sql)?\s*", "", sql, flags=re.IGNORECASE)
     sql = re.sub(r"\s*```$", "", sql)
     sql = sql.strip()
+
+    # Inject required fairness columns into SELECT
+    required_columns = (
+    "movie_id, title, "
+    "genres, release_year, vote_average, "
+    "overview, director_genders, director_names, "
+    "origin_countries, original_language, "
+    "is_english, top_cast_genders"
+)
+    sql = re.sub(
+        r'(?i)SELECT\s+',
+        f'SELECT {required_columns}, ',
+        sql,
+        count=1
+    )
+
     # Check if embeddings need to be substituted
     vector_embeddings = state.get("vector_embeddings")
     sql_has_vector = state.get("sql_has_vector", False)

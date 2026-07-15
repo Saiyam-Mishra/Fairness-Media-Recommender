@@ -380,8 +380,8 @@ def _fetch_supplementary_results(
     where_clause = " AND ".join(where_parts)
     sql = f"""
         SELECT movie_id, title, release_year, vote_average, overview, genres,
-               director_genders, origin_countries, is_english, is_western,
-               company_countries, spoken_languages
+       director_genders, director_names, origin_countries, original_language,
+       is_english, is_western, company_countries, spoken_languages, top_cast_genders
         FROM movie_summary
         WHERE {where_clause}
         ORDER BY embedding <=> %s::vector, vote_average DESC, popularity DESC NULLS LAST

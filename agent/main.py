@@ -83,7 +83,14 @@ def main():
                             year = r.get("release_year", "?")
                             rating = r.get("vote_average", "?")
                             genres = ", ".join(r.get("genres") or [])
+                            directors = ", ".join(r.get("director_names") or [])
+                            origin = ", ".join(r.get("origin_countries") or [])
+                            lang = r.get("original_language", "")
                             print(f"  {i}. {title} ({year}) — {rating}★ — {genres}")
+                            if directors:
+                                print(f"     Director(s): {directors}")
+                            if origin:
+                                print(f"     Origin: {origin} | Language: {lang}")
                         report = result.get("fairness_report")
                         if report:
                             before = report.get("metrics_before", {})

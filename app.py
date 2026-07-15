@@ -235,6 +235,16 @@ def render_movie_card(r: dict, rank: int | None = None):
     overview = r.get("overview", "")
 
     genre_tags  = "".join(f"<span>{g}</span>" for g in (genres if isinstance(genres, list) else []))
+    directors = r.get("director_names") or []
+    origin = r.get("origin_countries") or []
+    lang = r.get("original_language") or ""
+
+    if directors:
+        st.markdown(f"<div style='font-size:0.75rem;color:#94a3b8;margin-top:4px'>🎬 {', '.join(directors)}</div>",
+                    unsafe_allow_html=True)
+    if origin:
+        st.markdown(f"<div style='font-size:0.75rem;color:#94a3b8'>🌍 {', '.join(origin)} · {lang.upper()}</div>",
+                    unsafe_allow_html=True)
     rating_html = f"<span class='rating-badge'>★ {float(rating):.1f}</span>" if rating else ""
     rank_prefix = f"#{rank} " if rank else ""
     label       = f"{rank_prefix}{title}  {f'★ {float(rating):.1f}' if rating else ''}  {year}"
